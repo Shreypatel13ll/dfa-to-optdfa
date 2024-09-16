@@ -1,5 +1,7 @@
 # DFA Optimization and Visualization
 
+Try This: https://shreypatel13ll.github.io/dfa-to-optdfa/
+
 This project provides a web-based tool to visualize and optimize Deterministic Finite Automata (DFA) using Graphviz. The tool allows users to input a DFA, view its graphical representation, and obtain the minimized version of the DFA.
 
 ## Features
