@@ -1,101 +1,94 @@
-class NFA {
-  constructor(states, alphabet, transitions, startState, acceptStates) {
-    this.states = states;
-    this.alphabet = alphabet;
-    this.transitions = transitions; // {state: {symbol: [nextStates]}}
-    this.startState = startState;
-    this.acceptStates = acceptStates;
-  }
-}
-
+// DFA Class
 class DFA {
   constructor(states, alphabet, transitions, startState, acceptStates) {
     this.states = states;
     this.alphabet = alphabet;
     this.transitions = transitions; // {state: {symbol: nextState}}
     this.startState = startState;
-    this.acceptStates = acceptStates;
+    this.acceptStates = new Set(acceptStates);
   }
 }
 
-function convertNFAtoDFA(nfa) {
-  const dfaStates = new Map();
-  const dfaTransitions = {};
-  const dfaAcceptStates = new Set();
-  const dfaQueue = [];
+// DFA Minimization Algorithm
+function minimizeDFA(dfa) {
+  const { states, alphabet, transitions, startState, acceptStates } = dfa;
 
-  const startState = epsilonClosure([nfa.startState], nfa.transitions);
-  const startStateKey = stateSetToString(startState);
-  dfaQueue.push(startStateKey);
-  dfaStates.set(startStateKey, startState);
+  let partitions = [
+    new Set(acceptStates),
+    new Set(states.filter(state => !acceptStates.has(state))),
+  ];
 
-  while (dfaQueue.length > 0) {
-    const currentDfaState = dfaQueue.shift();
-    const currentNfaStates = dfaStates.get(currentDfaState);
-
-    if (currentNfaStates.some((state) => nfa.acceptStates.has(state))) {
-      dfaAcceptStates.add(currentDfaState);
+  function getPartitionIndex(state, partitions) {
+    for (let i = 0; i < partitions.length; i++) {
+      if (partitions[i].has(state)) return i;
     }
+    return -1;
+  }
 
-    dfaTransitions[currentDfaState] = {};
+  let stable = false;
+  while (!stable) {
+    stable = true;
+    const newPartitions = [];
 
-    for (const symbol of nfa.alphabet) {
-      const nextNfaStates = epsilonClosure(
-        currentNfaStates.flatMap(
-          (state) => nfa.transitions[state]?.[symbol] || []
-        ),
-        nfa.transitions
-      );
+    for (const partition of partitions) {
+      const transitionGroups = new Map();
+      for (const state of partition) {
+        const transitionsKey = alphabet.map(symbol =>
+          getPartitionIndex(transitions[state][symbol], partitions)
+        ).toString();
 
-      if (nextNfaStates.length > 0) {
-        const nextDfaState = stateSetToString(nextNfaStates);
-
-        if (!dfaStates.has(nextDfaState)) {
-          dfaQueue.push(nextDfaState);
-          dfaStates.set(nextDfaState, nextNfaStates);
+        if (!transitionGroups.has(transitionsKey)) {
+          transitionGroups.set(transitionsKey, []);
         }
+        transitionGroups.get(transitionsKey).push(state);
+      }
 
-        dfaTransitions[currentDfaState][symbol] = nextDfaState;
+      for (const group of transitionGroups.values()) {
+        const newPartition = new Set(group);
+        newPartitions.push(newPartition);
+
+        if (group.length < partition.size) {
+          stable = false;
+        }
+      }
+    }
+
+    partitions = newPartitions;
+  }
+
+  const minimizedDFA = new DFA([], alphabet, {}, null, []);
+
+  const stateMapping = new Map();
+
+  for (const [index, partition] of partitions.entries()) {
+    const newState = `P${index}`;
+    minimizedDFA.states.push(newState);
+
+    for (const oldState of partition) {
+      stateMapping.set(oldState, newState);
+      if (oldState === startState) {
+        minimizedDFA.startState = newState;
+      }
+      if (acceptStates.has(oldState)) {
+        minimizedDFA.acceptStates.add(newState);
       }
     }
   }
 
-  const dfaStartState = startStateKey;
-  const dfa = new DFA(
-    Array.from(dfaStates.keys()),
-    nfa.alphabet,
-    dfaTransitions,
-    dfaStartState,
-    Array.from(dfaAcceptStates)
-  );
+  for (const [oldState, newState] of stateMapping.entries()) {
+    minimizedDFA.transitions[newState] = {};
 
-  return dfa;
-}
-
-function epsilonClosure(states, transitions) {
-  const closure = new Set(states);
-  const stack = [...states];
-
-  while (stack.length > 0) {
-    const state = stack.pop();
-    const epsilonStates = transitions[state]?.[""] || [];
-
-    for (const nextState of epsilonStates) {
-      if (!closure.has(nextState)) {
-        closure.add(nextState);
-        stack.push(nextState);
-      }
+    for (const symbol of alphabet) {
+      const targetOldState = transitions[oldState][symbol];
+      const targetNewState = stateMapping.get(targetOldState);
+      minimizedDFA.transitions[newState][symbol] = targetNewState;
     }
   }
 
-  return Array.from(closure);
+  return minimizedDFA;
 }
 
-function stateSetToString(states) {
-  return `{${states.sort().join(",")}}`;
-}
-
-// Function to convert DFA to Graphviz (DOT) code
+// Convert DFA to Graphviz DOT code
 function dfaToGraphviz(dfa) {
   let dot = "digraph DFA {\n";
   dot += "    rankdir=LR;\n"; // Left to right orientation
@@ -120,107 +113,49 @@ function dfaToGraphviz(dfa) {
   return dot;
 }
 
-// Function to convert NFA to Graphviz (DOT) code
-function nfaToGraphviz(nfa) {
-  let dot = "digraph NFA {\n";
-  dot += "    rankdir=LR;\n"; // Left to right orientation
-  dot += "    node [shape=circle];\n";
+// Handle form submission
+document.getElementById('dfa-form').addEventListener('submit', function (event) {
+  event.preventDefault();
 
-  // Mark accept states with double circles
-  for (const state of nfa.acceptStates) {
-    dot += `    "${state}" [shape=doublecircle];\n`;
-  }
-
-  // Mark start state with a pointing arrow
-  dot += `    "" -> "${nfa.startState}";\n`;
-
-  // Add transitions
-  for (const [state, transitions] of Object.entries(nfa.transitions)) {
-    for (const [symbol, nextStates] of Object.entries(transitions)) {
-      for (const nextState of nextStates) {
-        const label = symbol === "" ? "ε" : symbol;
-        dot += `    "${state}" -> "${nextState}" [label="${label}"];\n`;
-      }
-    }
-  }
-
-  dot += "}";
-  return dot;
-}
-
-// Parse form input and generate NFA/DFA
-document
-  .getElementById("nfa-form")
-  .addEventListener("submit", function (event) {
-    event.preventDefault();
-
-    const states = document
-      .getElementById("states")
-      .value.split(",")
-      .map((s) => s.trim());
-    const alphabet = document
-      .getElementById("alphabet")
-      .value.split(",")
-      .map((s) => s.trim());
-
-    const transitionInput = document
-      .getElementById("transitions")
-      .value.split(";");
-    const transitions = {};
-    transitionInput.forEach((tr) => {
-      const [state, symbol, nextStates] = tr.split("-");
-      if (!transitions[state]) transitions[state] = {};
-      transitions[state][symbol] = nextStates.split(",").map((s) => s.trim());
-    });
-
-    const startState = document.getElementById("start-state").value.trim();
-    const acceptStates = new Set(
-      document
-        .getElementById("accept-states")
-        .value.split(",")
-        .map((s) => s.trim())
-    );
-
-    const nfa = new NFA(
-      states,
-      alphabet,
-      transitions,
-      startState,
-      acceptStates
-    );
-
-    // Convert NFA to DFA
-    const dfa = convertNFAtoDFA(nfa);
-
-    // Convert NFA and DFA to Graphviz DOT code
-    const nfaGraphvizCode = nfaToGraphviz(nfa);
-    const dfaGraphvizCode = dfaToGraphviz(dfa);
-
-    // Render NFA and DFA graphs
-    const viz = new Viz();
-    viz.renderSVGElement(nfaGraphvizCode).then(function (svgElement) {
-      const nfaGraphDiv = document.getElementById("nfa-graph");
-      nfaGraphDiv.innerHTML = ""; // Clear previous graph
-      nfaGraphDiv.appendChild(svgElement);
-    });
-
-    viz.renderSVGElement(dfaGraphvizCode).then(function (svgElement) {
-      const dfaGraphDiv = document.getElementById("dfa-graph");
-      dfaGraphDiv.innerHTML = ""; // Clear previous graph
-      dfaGraphDiv.appendChild(svgElement);
-    });
+  const states = document.getElementById('states').value.split(',').map(s => s.trim());
+  const alphabet = document.getElementById('alphabet').value.split(',').map(s => s.trim());
+  const transitionsInput = document.getElementById('transitions').value.split(';');
+  const transitions = {};
+  transitionsInput.forEach(transition => {
+    const [state, symbol, nextState] = transition.split('-');
+    if (!transitions[state]) transitions[state] = {};
+    transitions[state][symbol] = nextState;
   });
 
-// Example usage:
+  const startState = document.getElementById('start-state').value.trim();
+  const acceptStates = new Set(document.getElementById('accept-states').value.split(',').map(s => s.trim()));
 
-// const nfa = new NFA(
-//     ['q0', 'q1', 'q2'],
-//     ['a', 'b'],
-//     {
-//         'q0': { 'a': ['q0', 'q1'], 'b': ['q0'] },
-//         'q1': { 'a': ['q2'], 'b': [] },
-//         'q2': { 'a': [], 'b': [] }
-//     },
-//     'q0',
-//     new Set(['q2'])
-// );
+  // Create DFA object
+  const dfa = new DFA(states, alphabet, transitions, startState, acceptStates);
+
+  // Convert DFA to Graphviz DOT code
+  const dfaGraphvizCode = dfaToGraphviz(dfa);
+
+  // Render DFA graph
+  const viz = new Viz();
+  viz.renderSVGElement(dfaGraphvizCode)
+    .then(svgElement => {
+      document.getElementById('dfa-graph').innerHTML = '';
+      document.getElementById('dfa-graph').appendChild(svgElement);
+    })
+    .catch(error => console.error(error));
+
+  // Optimize DFA
+  const optimizedDFA = minimizeDFA(dfa);
+
+  // Convert Optimized DFA to Graphviz DOT code 
+  const optimizedDfaGraphvizCode = dfaToGraphviz(optimizedDFA);
+
+  // Render Optimized DFA graph
+  viz.renderSVGElement(optimizedDfaGraphvizCode)
+    .then(svgElement => {
+      document.getElementById('optimized-dfa-graph').innerHTML = '';
+      document.getElementById('optimized-dfa-graph').appendChild(svgElement);
+    })
+    .catch(error => console.error(error));
+});
