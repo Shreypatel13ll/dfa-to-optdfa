@@ -148,5 +148,18 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('optimized-dfa-graph').appendChild(svgElement);
       })
       .catch(error => console.error(error));
+
+    // Build the URL with query parameters
+    const queryString = new URLSearchParams({
+      states: states.join(','),
+      alphabet: alphabet.join(','),
+      transitions: transitionsInput.join(';'),
+      'start-state': startState,
+      'accept-states': Array.from(acceptStates).join(',')
+    }).toString();
+
+    // Update the URL without reloading the page
+    history.pushState(null, '', '?' + queryString);
   });
 });
+
