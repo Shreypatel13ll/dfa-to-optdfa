@@ -88,74 +88,65 @@ function minimizeDFA(dfa) {
   return minimizedDFA;
 }
 
-// Convert DFA to Graphviz DOT code
-function dfaToGraphviz(dfa) {
-  let dot = "digraph DFA {\n";
-  dot += "    rankdir=LR;\n"; // Left to right orientation
-  dot += "    node [shape=circle];\n";
+document.addEventListener('DOMContentLoaded', function () {
+  function dfaToGraphviz(dfa) {
+    let dot = "digraph DFA {\n";
+    dot += "    rankdir=LR;\n";
+    dot += "    node [shape=circle];\n";
 
-  // Mark accept states with double circles
-  for (const state of dfa.acceptStates) {
-    dot += `    "${state}" [shape=doublecircle];\n`;
-  }
-
-  // Mark start state with a pointing arrow
-  dot += `    "" -> "${dfa.startState}";\n`;
-
-  // Add transitions
-  for (const [state, transitions] of Object.entries(dfa.transitions)) {
-    for (const [symbol, nextState] of Object.entries(transitions)) {
-      dot += `    "${state}" -> "${nextState}" [label="${symbol}"];\n`;
+    for (const state of dfa.acceptStates) {
+      dot += `    "${state}" [shape=doublecircle];\n`;
     }
+
+    dot += `    "" -> "${dfa.startState}";\n`;
+
+    for (const [state, transitions] of Object.entries(dfa.transitions)) {
+      for (const [symbol, nextState] of Object.entries(transitions)) {
+        dot += `    "${state}" -> "${nextState}" [label="${symbol}"];\n`;
+      }
+    }
+
+    dot += "}";
+    return dot;
   }
 
-  dot += "}";
-  return dot;
-}
+  document.getElementById('dfa-form').addEventListener('submit', function (event) {
+    event.preventDefault();
 
-// Handle form submission
-document.getElementById('dfa-form').addEventListener('submit', function (event) {
-  event.preventDefault();
+    const states = document.getElementById('states').value.split(',').map(s => s.trim());
+    const alphabet = document.getElementById('alphabet').value.split(',').map(s => s.trim());
+    const transitionsInput = document.getElementById('transitions').value.split(';');
+    const transitions = {};
+    transitionsInput.forEach(transition => {
+      const [state, symbol, nextState] = transition.split('-');
+      if (!transitions[state]) transitions[state] = {};
+      transitions[state][symbol] = nextState;
+    });
 
-  const states = document.getElementById('states').value.split(',').map(s => s.trim());
-  const alphabet = document.getElementById('alphabet').value.split(',').map(s => s.trim());
-  const transitionsInput = document.getElementById('transitions').value.split(';');
-  const transitions = {};
-  transitionsInput.forEach(transition => {
-    const [state, symbol, nextState] = transition.split('-');
-    if (!transitions[state]) transitions[state] = {};
-    transitions[state][symbol] = nextState;
+    const startState = document.getElementById('start-state').value.trim();
+    const acceptStates = new Set(document.getElementById('accept-states').value.split(',').map(s => s.trim()));
+
+    const dfa = new DFA(states, alphabet, transitions, startState, acceptStates);
+
+    const dfaGraphvizCode = dfaToGraphviz(dfa);
+
+    const viz = new Viz();
+    viz.renderSVGElement(dfaGraphvizCode)
+      .then(svgElement => {
+        document.getElementById('dfa-graph').innerHTML = '';
+        document.getElementById('dfa-graph').appendChild(svgElement);
+      })
+      .catch(error => console.error(error));
+
+    const optimizedDFA = minimizeDFA(dfa);
+
+    const optimizedDfaGraphvizCode = dfaToGraphviz(optimizedDFA);
+
+    viz.renderSVGElement(optimizedDfaGraphvizCode)
+      .then(svgElement => {
+        document.getElementById('optimized-dfa-graph').innerHTML = '';
+        document.getElementById('optimized-dfa-graph').appendChild(svgElement);
+      })
+      .catch(error => console.error(error));
   });
-
-  const startState = document.getElementById('start-state').value.trim();
-  const acceptStates = new Set(document.getElementById('accept-states').value.split(',').map(s => s.trim()));
-
-  // Create DFA object
-  const dfa = new DFA(states, alphabet, transitions, startState, acceptStates);
-
-  // Convert DFA to Graphviz DOT code
-  const dfaGraphvizCode = dfaToGraphviz(dfa);
-
-  // Render DFA graph
-  const viz = new Viz();
-  viz.renderSVGElement(dfaGraphvizCode)
-    .then(svgElement => {
-      document.getElementById('dfa-graph').innerHTML = '';
-      document.getElementById('dfa-graph').appendChild(svgElement);
-    })
-    .catch(error => console.error(error));
-
-  // Optimize DFA
-  const optimizedDFA = minimizeDFA(dfa);
-
-  // Convert Optimized DFA to Graphviz DOT code 
-  const optimizedDfaGraphvizCode = dfaToGraphviz(optimizedDFA);
-
-  // Render Optimized DFA graph
-  viz.renderSVGElement(optimizedDfaGraphvizCode)
-    .then(svgElement => {
-      document.getElementById('optimized-dfa-graph').innerHTML = '';
-      document.getElementById('optimized-dfa-graph').appendChild(svgElement);
-    })
-    .catch(error => console.error(error));
 });
